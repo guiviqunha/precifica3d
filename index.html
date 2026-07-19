@@ -1,0 +1,1807 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Precifica3D + Gestão de Orçamentos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+
+/* ============ RESET & SHELL ============ */
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:#0A0A0A;}
+body{font-family:'IBM Plex Sans',sans-serif;}
+.view{display:none;}
+.view.active{display:block;}
+
+/* ============ TOP NAV SWITCHER ============ */
+.main-switch{
+  position:sticky;top:0;z-index:80;
+  display:flex;background:#0A0A0A;border-bottom:1px solid #2A2A2A;
+}
+.main-switch button{
+  flex:1;padding:15px 10px;background:none;border:none;cursor:pointer;
+  color:#8F8B7E;font-family:'IBM Plex Mono',monospace;font-size:11.5px;
+  letter-spacing:.12em;text-transform:uppercase;font-weight:600;
+  border-bottom:2px solid transparent;transition:color .15s ease,border-color .15s ease;
+}
+.main-switch button:hover{color:#F5F5F2;}
+.main-switch button.active{color:#D4AF37;border-bottom-color:#D4AF37;}
+
+/* ============ SHARED MODAL / TOAST / FIELD COMPONENTS ============
+   Used by all three views (gestão, precificação-approve, materiais) so
+   modalRoot/toastRoot/savingRoot can live outside any single view. */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:16px;z-index:200;}
+.modal{background:#141414;border:1px solid #332C16;border-radius:3px;padding:24px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto;color:#F5F5F2;font-family:'IBM Plex Sans',sans-serif;}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+.modal-head h2{font-family:'Lora',serif;font-size:18px;font-weight:600;color:#F5F5F2;margin:0;}
+.modal-head button{background:none;border:none;color:#C7A544;cursor:pointer;padding:4px;}
+
+.field{display:block;margin-bottom:16px;}
+.field label{display:block;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:#C7A544;margin-bottom:6px;}
+.field input,.field select,.field textarea{width:100%;padding:9px 11px;border-radius:2px;border:1px solid #4A3F1E;background:#1B1B1B;color:#F5F5F2;font-size:14px;font-family:inherit;outline:none;}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:#D4AF37;}
+.field textarea{resize:none;min-height:60px;}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+
+.modal-actions{display:flex;gap:8px;margin-top:8px;}
+.btn{flex:1;padding:11px;border-radius:2px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;}
+.btn-secondary{background:none;border:1px solid #4A3F1E;color:#C9C6BC;}
+.btn-secondary:hover{border-color:#C7A544;color:#F5F5F2;}
+.btn-primary{background:#D4AF37;border:1px solid #D4AF37;color:#0A0A0A;font-weight:600;}
+.btn-danger{background:#E2574C;border:1px solid #E2574C;color:#F5F5F2;}
+
+.hint{font-size:12px;color:#8F8B7E;margin-top:6px;}
+
+.icon-btn{background:none;border:none;padding:8px;border-radius:2px;cursor:pointer;color:#C9C6BC;display:flex;align-items:center;justify-content:center;}
+.icon-btn:hover{background:rgba(212,175,55,.12);color:#D4AF37;}
+.icon-btn.danger{color:#E2574C;}
+.icon-btn.danger:hover{background:#2A1613;color:#E2574C;}
+.icon-btn svg{width:15px;height:15px;}
+
+.empty{background:#101010;border:1px dashed #2A2A2A;border-radius:3px;padding:32px;text-align:center;}
+.empty p.small{color:#8F8B7E;font-size:14px;margin:0;}
+
+.toast{position:fixed;bottom:16px;right:16px;background:#E2574C;color:#F5F5F2;padding:10px 16px;border-radius:2px;font-size:14px;z-index:210;font-family:'IBM Plex Sans',sans-serif;}
+.toast.ok{background:#4CAF6D;color:#0A0A0A;}
+.saving{position:fixed;bottom:16px;left:16px;display:flex;align-items:center;gap:8px;background:#141414;border:1px solid #332C16;color:#C7A544;padding:6px 12px;border-radius:2px;font-size:12px;z-index:210;font-family:'IBM Plex Sans',sans-serif;}
+.spin{animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.hidden{display:none!important;}
+
+/* ============ MATERIAIS VIEW ============ */
+#view-materiais{
+  --bg:#0A0A0A; --card-bg:#141414; --card-border:#332C16; --gold:#D4AF37;
+  --gold-soft:#C7A544; --white:#F5F5F2; --gray:#C9C6BC; --gray-2:#8F8B7E; --red:#E2574C;
+  background:var(--bg); color:var(--white); min-height:100vh; font-family:'IBM Plex Sans',sans-serif;
+}
+#view-materiais .wrap{max-width:1100px;margin:0 auto;padding:32px 20px 60px;}
+@media(min-width:640px){#view-materiais .wrap{padding:48px 24px 60px;}}
+#view-materiais header.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:16px;}
+#view-materiais .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin:0 0 4px;}
+#view-materiais h1{font-family:'Lora',serif;font-size:28px;font-weight:600;color:var(--white);margin:0;}
+@media(min-width:640px){#view-materiais h1{font-size:34px;}}
+#view-materiais .mat-intro{color:var(--gray-2);font-size:13px;margin:0 0 28px;max-width:640px;}
+#view-materiais .btn-new{display:flex;align-items:center;gap:8px;background:var(--gold);color:#0A0A0A;border:none;padding:11px 18px;border-radius:2px;font-weight:600;font-size:14px;cursor:pointer;font-family:inherit;flex-shrink:0;}
+#view-materiais .btn-new:hover{transform:translateY(-2px);}
+#view-materiais .mat-section-title{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold-soft);margin:26px 0 12px;}
+#view-materiais .mat-section-title:first-child{margin-top:0;}
+#view-materiais .mat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;}
+#view-materiais .mat-card{background:var(--card-bg);border:1px solid var(--card-border);border-radius:3px;padding:16px;}
+#view-materiais .mat-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:12px;}
+#view-materiais .mat-name{font-family:'Lora',serif;font-weight:600;font-size:15px;color:var(--white);margin:0;}
+#view-materiais .mat-cor{font-size:11px;color:var(--gray-2);margin:2px 0 0;}
+#view-materiais .mat-nums{display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:13px;margin-bottom:12px;}
+#view-materiais .mat-num-label{font-size:9px;color:var(--gray-2);text-transform:uppercase;letter-spacing:.06em;margin:0;}
+#view-materiais .mat-num-value{margin:3px 0 0;color:var(--white);}
+#view-materiais .mat-num-value.low{color:var(--red);}
+#view-materiais .mat-actions{display:flex;gap:2px;justify-content:flex-end;border-top:1px solid var(--card-border);padding-top:8px;}
+
+/* ============ PRECIFICAÇÃO — approve card & material select ============ */
+#view-precificacao .approve-card{border-color:var(--accent);}
+#view-precificacao .approve-btn{
+  width:100%;padding:13px;border-radius:2px;border:1px solid var(--accent);cursor:pointer;
+  background:var(--accent);color:#0A0A0A;font-family:'IBM Plex Sans',sans-serif;
+  font-weight:600;font-size:14px;transition:transform .15s ease,opacity .15s ease;
+}
+#view-precificacao .approve-btn:hover{transform:translateY(-2px);}
+#view-precificacao select.material-select{
+  width:100%;background:var(--panel-2);border:1px solid var(--line);
+  color:var(--ink);border-radius:2px;padding:10px 12px;
+  font-family:'IBM Plex Mono',monospace;font-size:13.5px;outline:none;
+}
+#view-precificacao select.material-select:focus{border-color:var(--accent);}
+
+
+  @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --bg:#0A0A0A;          /* fundo geral / botões escuros */
+    --bg-2:#101010;        /* superfícies vazias */
+    --border:#2A2A2A;      /* divisores neutros */
+    --card-bg:#141414;     /* fundo dos cartões */
+    --input-bg:#1B1B1B;    /* fundo de inputs */
+    --card-border:#332C16; /* borda dourada sutil dos cartões */
+    --input-border:#4A3F1E;/* borda dos inputs */
+    --gold:#D4AF37;        /* dourado principal */
+    --gold-soft:#C7A544;   /* dourado para labels/textos secundários */
+    --white:#F5F5F2;       /* branco principal */
+    --gray:#C9C6BC;        /* texto secundário claro */
+    --gray-2:#8F8B7E;      /* texto terciário / inativo */
+    --green:#4CAF6D;
+    --green-bg:#15241C;
+    --red:#E2574C;
+    --red-bg:#2A1613;
+    --amber-bg:#241D0E;
+  }#view-gestao *{box-sizing:border-box;}#view-gestao{
+    margin:0;
+    background:var(--bg);
+    font-family:'IBM Plex Sans', sans-serif;
+    color:var(--white);
+    min-height:100vh;
+  }#view-gestao .wrap{max-width:1100px;margin:0 auto;padding:32px 20px 60px;}
+  @media(min-width:640px){#view-gestao .wrap{padding:48px 24px 60px;}}#view-gestao header.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;gap:16px;}#view-gestao .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin:0 0 4px;}#view-gestao h1{font-family:'Lora',serif;font-size:28px;font-weight:600;color:var(--white);margin:0;}
+  @media(min-width:640px){#view-gestao h1{font-size:34px;}}#view-gestao .btn-new{display:flex;align-items:center;gap:8px;background:var(--gold);color:#0A0A0A;border:none;padding:11px 18px;border-radius:2px;font-weight:600;font-size:14px;cursor:pointer;transition:transform .15s;flex-shrink:0;font-family:inherit;}#view-gestao .btn-new:hover{transform:translateY(-2px);}#view-gestao /* month bar */
+  .month-bar{display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap;}#view-gestao .month-nav{display:flex;align-items:center;gap:2px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:2px;padding:4px;}#view-gestao .month-nav button{background:none;border:none;color:var(--gold);cursor:pointer;padding:6px 10px;font-size:15px;border-radius:2px;font-family:inherit;}#view-gestao .month-nav button:hover{background:rgba(212,175,55,.12);}#view-gestao .month-label{font-family:'Lora',serif;font-size:15px;font-weight:600;color:var(--white);padding:0 6px;min-width:130px;text-align:center;text-transform:capitalize;}#view-gestao .btn-ghost{background:none;border:1px solid var(--card-border);color:var(--gray);font-size:12px;padding:8px 12px;border-radius:2px;cursor:pointer;font-family:inherit;}#view-gestao .btn-ghost:hover{color:var(--gold);border-color:var(--gold);}#view-gestao .btn-ghost.on{color:#0A0A0A;background:var(--gold);border-color:var(--gold);}#view-gestao nav.tabs{display:flex;gap:2px;margin-bottom:24px;border-bottom:1px solid var(--border);overflow-x:auto;}#view-gestao .tab-btn{display:flex;align-items:center;gap:6px;background:none;border:none;color:var(--gray-2);font-family:inherit;font-size:13px;font-weight:500;padding:10px 14px;cursor:pointer;position:relative;white-space:nowrap;}#view-gestao .tab-btn.active{color:var(--white);}#view-gestao .tab-btn.active::after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:2px;background:var(--gold);}#view-gestao .card{background:var(--card-bg);border:1px solid var(--card-border);border-radius:3px;padding:20px;}#view-gestao .empty{background:var(--bg-2);border:1px dashed var(--border);border-radius:3px;padding:40px;text-align:center;}#view-gestao .empty p.big{color:var(--gold);font-family:'Lora',serif;font-size:18px;margin:0 0 4px;}#view-gestao .empty p.small{color:var(--gray-2);font-size:14px;margin:0;}#view-gestao .grid-metrics{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;}
+  @media(min-width:1024px){#view-gestao .grid-metrics{grid-template-columns:repeat(4,1fr);gap:16px;}}#view-gestao .metric-label{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold-soft);margin:0 0 8px;}#view-gestao .metric-value{font-family:'Lora',serif;font-size:26px;font-weight:600;color:var(--gold);margin:0;}
+  @media(min-width:640px){#view-gestao .metric-value{font-size:30px;}}#view-gestao .metric-sub{font-size:12px;color:var(--gray-2);margin:6px 0 0;}#view-gestao .tone-positive{color:var(--green)!important;}#view-gestao .tone-negative{color:var(--red)!important;}#view-gestao .grid-two{display:grid;gap:16px;margin-bottom:16px;}
+  @media(min-width:900px){#view-gestao .grid-two{grid-template-columns:1fr 1fr;}}#view-gestao .grid-two.with-cal{grid-template-columns:1fr;}
+  @media(min-width:900px){#view-gestao .grid-two.with-cal{grid-template-columns:1.1fr 1fr;}}#view-gestao .row-between{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}#view-gestao .stamp{display:inline-block;padding:5px 10px;font-size:10px;font-weight:700;letter-spacing:.12em;border:2px solid;border-radius:2px;transform:rotate(-2deg);font-family:'IBM Plex Mono',monospace;}#view-gestao .stamp.orcamento{color:var(--gold-soft);border-color:var(--gold-soft);background:var(--amber-bg);}#view-gestao .stamp.andamento{color:var(--red);border-color:var(--red);background:var(--red-bg);}#view-gestao .stamp.fechado{color:var(--green);border-color:var(--green);background:var(--green-bg);}#view-gestao /* calendar widget */
+  .cal-card{background:var(--card-bg);border:1px solid var(--card-border);border-radius:3px;padding:20px;}#view-gestao .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}#view-gestao .cal-title{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold-soft);margin:0;}#view-gestao .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;}#view-gestao .cal-dow{font-size:10px;color:var(--gray-2);padding-bottom:6px;font-family:'IBM Plex Mono',monospace;}#view-gestao .cal-cell{position:relative;aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:12.5px;color:var(--gray);border-radius:2px;}#view-gestao .cal-cell.blank{visibility:hidden;}#view-gestao .cal-cell.today{background:var(--gold);color:#0A0A0A;font-weight:700;}#view-gestao .cal-cell .dot{position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--gold);}#view-gestao .cal-cell.today .dot{background:#0A0A0A;}#view-gestao .cal-foot{margin-top:14px;font-size:12px;color:var(--gray-2);display:flex;align-items:center;gap:6px;}#view-gestao .cal-foot .dotlegend{width:5px;height:5px;border-radius:50%;background:var(--gold);display:inline-block;}#view-gestao .list{display:flex;flex-direction:column;gap:10px;}#view-gestao .item{background:var(--card-bg);border:1px solid var(--card-border);border-radius:3px;padding:16px 20px;display:flex;flex-direction:column;gap:12px;}
+  @media(min-width:640px){#view-gestao .item{flex-direction:row;align-items:center;gap:16px;}}#view-gestao .item-main{flex:1;min-width:0;}#view-gestao .item-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;}#view-gestao .item-date{font-size:11px;color:var(--gray-2);font-family:'IBM Plex Mono',monospace;}#view-gestao .item-client{font-family:'Lora',serif;font-weight:600;font-size:15px;color:var(--white);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}#view-gestao .item-desc{font-size:14px;color:var(--gray);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}#view-gestao .item-nums{display:flex;gap:16px;font-family:'IBM Plex Mono',monospace;font-size:14px;flex-shrink:0;}
+  @media(min-width:640px){#view-gestao .item-nums{gap:22px;}}#view-gestao .num{text-align:right;}#view-gestao .num-label{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--gray-2);margin:0;}#view-gestao .num-value{font-weight:500;color:var(--white);margin:2px 0 0;}#view-gestao .item-actions{display:flex;align-items:center;gap:4px;flex-shrink:0;}
+  @media(min-width:640px){#view-gestao .item-actions{border-left:1px solid var(--border);padding-left:14px;}}#view-gestao .icon-btn{background:none;border:none;padding:8px;border-radius:2px;cursor:pointer;color:var(--gray);display:flex;align-items:center;justify-content:center;}#view-gestao .icon-btn:hover{background:rgba(212,175,55,.12);color:var(--gold);}#view-gestao .icon-btn.danger{color:var(--red);}#view-gestao .icon-btn.danger:hover{background:var(--red-bg);color:var(--red);}#view-gestao .icon-btn svg{width:15px;height:15px;}#view-gestao .overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50;}#view-gestao .modal{background:var(--card-bg);border:1px solid var(--card-border);border-radius:3px;padding:24px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto;}#view-gestao .modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}#view-gestao .modal-head h2{font-family:'Lora',serif;font-size:18px;font-weight:600;color:var(--white);margin:0;}#view-gestao .modal-head button{background:none;border:none;color:var(--gold-soft);cursor:pointer;padding:4px;}#view-gestao .autofill-note{font-size:12px;color:var(--gold-soft);background:var(--amber-bg);border:1px solid var(--card-border);border-radius:2px;padding:8px 10px;margin:-6px 0 16px;}#view-gestao .field{display:block;margin-bottom:16px;}#view-gestao .field label{display:block;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold-soft);margin-bottom:6px;}#view-gestao .field input, #view-gestao .field select, #view-gestao .field textarea{width:100%;padding:9px 11px;border-radius:2px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--white);font-size:14px;font-family:inherit;outline:none;}#view-gestao .field input:focus, #view-gestao .field select:focus, #view-gestao .field textarea:focus{border-color:var(--gold);}#view-gestao .field textarea{resize:none;min-height:60px;}#view-gestao .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}#view-gestao .modal-actions{display:flex;gap:8px;margin-top:8px;}#view-gestao .btn{flex:1;padding:11px;border-radius:2px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;}#view-gestao .btn-secondary{background:none;border:1px solid var(--input-border);color:var(--gray);}#view-gestao .btn-secondary:hover{border-color:var(--gold-soft);color:var(--white);}#view-gestao .btn-primary{background:var(--gold);border:1px solid var(--gold);color:#0A0A0A;font-weight:600;}#view-gestao .btn-danger{background:var(--red);border:1px solid var(--red);color:var(--white);}#view-gestao .toast{position:fixed;bottom:16px;right:16px;background:var(--red);color:var(--white);padding:10px 16px;border-radius:2px;font-size:14px;z-index:60;}#view-gestao .saving{position:fixed;bottom:16px;left:16px;display:flex;align-items:center;gap:8px;background:var(--card-bg);border:1px solid var(--card-border);color:var(--gold-soft);padding:6px 12px;border-radius:2px;font-size:12px;z-index:60;}#view-gestao .spin{animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}#view-gestao .loading-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;}#view-gestao .hidden{display:none!important;}
+#view-precificacao{
+    --bg:#0A0A0A;
+    --panel:#141414;
+    --panel-2:#1B1B1B;
+    --line:#332C16;
+    --ink:#F5F5F2;
+    --mist:#C9C6BC;
+    --mist-dim:#8F8B7E;
+    --green:#4CAF6D;
+    --red:#E2574C;
+    --radius:3px;
+  }#view-precificacao.tab-filament{ --accent:#D4AF37; --accent-soft:rgba(212,175,55,.14); }#view-precificacao.tab-resin{ --accent:#D4AF37; --accent-soft:rgba(212,175,55,.14); }#view-precificacao *{box-sizing:border-box;}#view-precificacao html, #view-precificacao{margin:0;padding:0;}#view-precificacao{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'IBM Plex Sans',sans-serif;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }#view-precificacao .mono{font-family:'IBM Plex Mono',monospace;}#view-precificacao h1, #view-precificacao h2, #view-precificacao h3, #view-precificacao .display{font-family:'Lora',serif;}#view-precificacao a{color:inherit;}#view-precificacao /* ---------- Layout shell ---------- */
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px;}#view-precificacao header.top{
+    border-bottom:1px solid var(--line);
+    padding:28px 0 24px;
+  }#view-precificacao .top-inner{display:flex;align-items:center;gap:16px;}#view-precificacao .logo{
+    width:40px;height:40px;flex:none;
+    color:var(--accent);
+    transition:color .25s ease;
+  }#view-precificacao .brand h1{
+    font-family:'Lora',serif;font-size:22px;font-weight:600;margin:0;letter-spacing:0;
+  }#view-precificacao .brand p{
+    margin:2px 0 0;color:var(--mist);font-size:13.5px;
+  }#view-precificacao main{padding:36px 0 80px;}#view-precificacao /* ---------- Tabs ---------- */
+  .tabs{
+    display:flex;gap:8px;margin-bottom:28px;
+    border:1px solid var(--line);
+    background:var(--panel);
+    padding:5px;border-radius:3px;
+    max-width:420px;
+  }#view-precificacao .tab-btn{
+    flex:1;padding:11px 14px;border:none;background:transparent;
+    color:var(--mist);font-family:'IBM Plex Sans',sans-serif;font-weight:600;
+    font-size:14px;border-radius:2px;cursor:pointer;
+    transition:background .2s ease,color .2s ease;
+  }#view-precificacao .tab-btn.active{background:var(--accent-soft);color:var(--accent);}#view-precificacao .tab-btn:hover:not(.active){color:var(--ink);}#view-precificacao /* ---------- Grid ---------- */
+  .grid{
+    display:grid;grid-template-columns:1.15fr 0.85fr;gap:28px;align-items:start;
+  }
+  @media (max-width:900px){#view-precificacao .grid{grid-template-columns:1fr;}
+  }#view-precificacao .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:24px;
+  }#view-precificacao .card + .card{margin-top:20px;}#view-precificacao fieldset{border:none;margin:0 0 26px;padding:0;}#view-precificacao fieldset:last-child{margin-bottom:0;}#view-precificacao legend{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;font-weight:600;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--accent);
+    padding:0 0 12px;width:100%;
+    border-bottom:1px solid var(--line);
+    margin-bottom:16px;
+  }#view-precificacao .field-row{
+    display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;
+  }#view-precificacao .field-row:last-child{margin-bottom:0;}
+  @media (max-width:520px){#view-precificacao .field-row{grid-template-columns:1fr;} }#view-precificacao .field label{
+    display:block;font-size:12.5px;color:var(--mist);margin-bottom:6px;
+  }#view-precificacao .field-input{
+    position:relative;
+  }#view-precificacao .field-input input{
+    width:100%;background:var(--panel-2);border:1px solid var(--line);
+    color:var(--ink);border-radius:2px;padding:10px 44px 10px 12px;
+    font-family:'IBM Plex Mono',monospace;font-size:14px;
+    outline:none;transition:border-color .15s ease;
+  }#view-precificacao .field-input input:focus{border-color:var(--accent);}#view-precificacao .field-input .suffix{
+    position:absolute;right:12px;top:50%;transform:translateY(-50%);
+    color:var(--mist-dim);font-size:12px;font-family:'IBM Plex Mono',monospace;
+    pointer-events:none;
+  }#view-precificacao .hint{font-size:12px;color:var(--mist-dim);margin-top:6px;}#view-precificacao /* ---------- Results panel ---------- */
+  .sticky{position:sticky;top:24px;}#view-precificacao .result-title{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--mist);margin:0 0 6px;
+  }#view-precificacao .result-price{
+    font-size:36px;font-weight:600;font-family:'Lora',serif;
+    color:var(--accent);margin:0 0 2px;
+  }#view-precificacao .result-sub{color:var(--mist);font-size:13px;margin:0 0 22px;}#view-precificacao .layers{
+    display:flex;flex-direction:column-reverse;
+    height:190px;border-radius:3px;overflow:hidden;
+    border:1px solid var(--line);
+    margin-bottom:14px;
+  }#view-precificacao .layer{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 12px;font-size:11.5px;
+    border-top:1px solid var(--bg);
+    color:rgba(255,255,255,.92);
+    min-height:4px;
+    transition:flex-grow .3s ease;
+    overflow:hidden;
+    white-space:nowrap;
+  }#view-precificacao .layer span.v{font-family:'IBM Plex Mono',monospace;opacity:.9;}#view-precificacao .legend{
+    display:flex;flex-wrap:wrap;gap:10px 16px;margin-bottom:22px;
+  }#view-precificacao .legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mist);}#view-precificacao .legend-dot{width:9px;height:9px;border-radius:2px;flex:none;}#view-precificacao .divider{height:1px;background:var(--line);margin:22px 0;}#view-precificacao /* ---------- Marketplace cards ---------- */
+  .mk-card{
+    border:1px solid var(--line);background:var(--panel-2);
+    border-radius:3px;padding:14px 16px;margin-bottom:10px;
+  }#view-precificacao .mk-card:last-child{margin-bottom:0;}#view-precificacao .mk-top{display:flex;align-items:center;justify-content:space-between;gap:10px;}#view-precificacao .mk-name{font-family:'Lora',serif;font-weight:600;font-size:15px;}#view-precificacao .switch{
+    position:relative;width:38px;height:22px;flex:none;
+  }#view-precificacao .switch input{opacity:0;width:100%;height:100%;position:absolute;margin:0;cursor:pointer;z-index:2;}#view-precificacao .switch .track{
+    position:absolute;inset:0;background:var(--line);border-radius:20px;
+    transition:background .2s ease;
+  }#view-precificacao .switch .thumb{
+    position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;
+    background:var(--mist);transition:transform .2s ease,background .2s ease;
+  }#view-precificacao .switch input:checked ~ .track{background:var(--accent-soft);}#view-precificacao .switch input:checked ~ .thumb{transform:translateX(16px);background:var(--accent);}#view-precificacao .mk-body{
+    display:grid;grid-template-columns:auto 1fr 1fr;gap:12px;align-items:end;
+    margin-top:12px;
+  }#view-precificacao .mk-body-5{grid-template-columns:repeat(3,auto) 1fr 1fr;}
+  @media (max-width:640px){#view-precificacao .mk-body-5{grid-template-columns:repeat(3,1fr);} }
+  @media (max-width:480px){#view-precificacao .mk-body{grid-template-columns:1fr;}#view-precificacao .mk-body-5{grid-template-columns:1fr 1fr;} }#view-precificacao .mk-body.disabled{opacity:.35;pointer-events:none;}#view-precificacao .mk-fee-input{width:76px;}#view-precificacao .mk-fee-input input{
+    width:100%;background:var(--panel);border:1px solid var(--line);color:var(--ink);
+    border-radius:2px;padding:8px 22px 8px 8px;font-family:'IBM Plex Mono',monospace;
+    font-size:13px;outline:none;
+  }#view-precificacao .mk-fee-wrap{position:relative;}#view-precificacao .mk-fee-wrap .pct{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--mist-dim);}#view-precificacao .mk-out{text-align:right;}#view-precificacao .mk-out .lbl{font-size:10.5px;color:var(--mist-dim);text-transform:uppercase;letter-spacing:.06em;}#view-precificacao .mk-out .val{font-family:'IBM Plex Mono',monospace;font-size:14.5px;}#view-precificacao .mk-out .val.profit{color:var(--green);}#view-precificacao .mk-out .val.warn{color:var(--red);}#view-precificacao .warn-box{
+    background:rgba(224,100,90,.1);border:1px solid rgba(224,100,90,.35);
+    color:var(--red);font-size:12.5px;padding:10px 12px;border-radius:2px;margin-top:12px;
+  }#view-precificacao footer{
+    border-top:1px solid var(--line);padding:22px 0;color:var(--mist-dim);font-size:12.5px;
+  }#view-precificacao footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}#view-precificacao .disclaimer{
+    font-size:11.5px;color:var(--mist-dim);margin-top:16px;line-height:1.5;
+  }#view-precificacao input[type=number]::-webkit-inner-spin-button, #view-precificacao input[type=number]::-webkit-outer-spin-button{opacity:1;}#view-precificacao :focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+  @media (prefers-reduced-motion: reduce){#view-precificacao *{transition:none !important;}
+  }
+</style>
+</head>
+<body>
+
+<nav class="main-switch">
+  <button data-view="gestao" class="active">Gestão de Orçamentos</button>
+  <button data-view="precificacao">Precificação</button>
+  <button data-view="materiais">Materiais</button>
+</nav>
+
+<div id="view-gestao" class="view active">
+
+
+<div id="loadingScreen" class="loading-screen">
+  <svg class="spin" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+</div>
+
+<div id="app" class="wrap hidden">
+  <header class="top">
+    <div>
+      <p class="eyebrow">Livro-caixa de serviços</p>
+      <h1>Gestão de Orçamentos</h1>
+    </div>
+    <button class="btn-new" id="btnNew">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+      <span style="display:none" class="new-label">Novo serviço</span>
+    </button>
+  </header>
+
+  <div class="month-bar">
+    <div class="month-nav">
+      <button id="prevMonth" title="Mês anterior">‹</button>
+      <span class="month-label" id="monthLabel">Julho 2026</span>
+      <button id="nextMonth" title="Próximo mês">›</button>
+    </div>
+    <button class="btn-ghost" id="todayBtn">Mês atual</button>
+    <button class="btn-ghost" id="toggleAll">Ver todos os períodos</button>
+  </div>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab-btn active" data-tab="dashboard">Resumo</button>
+    <button class="tab-btn" data-tab="orcamento">Orçamentos (<span id="cntOrc">0</span>)</button>
+    <button class="tab-btn" data-tab="andamento">Em andamento (<span id="cntAnd">0</span>)</button>
+    <button class="tab-btn" data-tab="fechado">Fechados (<span id="cntFec">0</span>)</button>
+  </nav>
+
+  <div id="content"></div>
+</div>
+
+</div>
+
+<div id="view-precificacao" class="view tab-filament">
+
+
+<header class="top">
+  <div class="wrap top-inner">
+    <svg class="logo" viewBox="0 0 40 40" fill="none">
+      <path d="M20 4 L34 11 L20 18 L6 11 Z" fill="currentColor" opacity="0.35"/>
+      <path d="M20 15 L34 22 L20 29 L6 22 Z" fill="currentColor" opacity="0.6"/>
+      <path d="M20 26 L34 33 L20 40 L6 33 Z" fill="currentColor" opacity="1"/>
+    </svg>
+    <div class="brand">
+      <h1>Precifica3D</h1>
+      <p>Calculadora de custos e preço de venda para peças impressas em 3D</p>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="filament" id="btn-filament">Filamento (FDM)</button>
+    <button class="tab-btn" data-tab="resin" id="btn-resin">Resina (SLA/DLP)</button>
+  </div>
+
+  <div class="grid">
+
+    <!-- ===================== INPUTS ===================== -->
+    <div>
+
+      <!-- FILAMENT FORM -->
+      <div class="card" id="form-filament">
+
+        <fieldset>
+          <legend>Material do estoque</legend>
+          <div class="field-row">
+            <div class="field" style="grid-column:1/-1;">
+              <label for="f_materialSelect">Usar filamento cadastrado</label>
+              <select id="f_materialSelect" class="material-select">
+                <option value="">— Preço manual —</option>
+              </select>
+              <p class="hint">Selecionar um material preenche o preço automaticamente e desconta do estoque quando você aprovar o orçamento.</p>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Peça</legend>
+          <div class="field-row">
+            <div class="field">
+              <label for="f_peso">Peso da peça</label>
+              <div class="field-input"><input type="number" id="f_peso" value="35" min="0" step="0.1"><span class="suffix">g</span></div>
+            </div>
+            <div class="field">
+              <label for="f_precoFil">Preço do filamento (rolo)</label>
+              <div class="field-input"><input type="number" id="f_precoFil" value="120" min="0" step="1"><span class="suffix">R$/kg</span></div>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Impressão</legend>
+          <div class="field-row">
+            <div class="field">
+              <label for="f_tempo">Tempo de impressão</label>
+              <div class="field-input"><input type="number" id="f_tempo" value="4" min="0" step="0.1"><span class="suffix">h</span></div>
+            </div>
+            <div class="field">
+              <label for="f_potencia">Potência da impressora</label>
+              <div class="field-input"><input type="number" id="f_potencia" value="120" min="0" step="1"><span class="suffix">W</span></div>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="f_tarifa">Tarifa de energia</label>
+              <div class="field-input"><input type="number" id="f_tarifa" value="0.85" min="0" step="0.01"><span class="suffix">R$/kWh</span></div>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Equipamento</legend>
+          <div class="field-row">
+            <div class="field">
+              <label for="f_precoImp">Valor da impressora</label>
+              <div class="field-input"><input type="number" id="f_precoImp" value="2000" min="0" step="10"><span class="suffix">R$</span></div>
+            </div>
+            <div class="field">
+              <label for="f_vidaUtil">Vida útil estimada</label>
+              <div class="field-input"><input type="number" id="f_vidaUtil" value="2000" min="1" step="10"><span class="suffix">h</span></div>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Consumíveis extras</legend>
+          <div class="field-row">
+            <div class="field">
+              <label for="f_consumiveis">Bicos, adesivo, fita, etc. (por peça)</label>
+              <div class="field-input"><input type="number" id="f_consumiveis" value="0.5" min="0" step="0.1"><span class="suffix">R$</span></div>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Mão de obra</legend>
+          <div class="field-row">
+            <div class="field">
+              <label for="f_horasMO">Pós-processamento (lixar, pintar, montar)</label>
+              <div class="field-input"><input type="number" id="f_horasMO" value="0.25" min="0" step="0.05"><span class="suffix">h</span></div>
+            </div>
+            <div class="field">
+              <label for="f_valorHora">Valor da sua hora</label>
+              <div class="field-input"><input type="number" id="f_valorHora" value="25" min="0" step="1"><span class="suffix">R$/h</span></div>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Margens</legend>
+          <div class="field-row">
+            <div class="field">
+              <label for="f_falha">Margem para falhas de impressão</label>
+              <div class="field-input"><input type="number" id="f_falha" value="10" min="0" step="1"><span class="suffix">%</span></div>
+            </div>
+            <div class="field">
+              <label for="f_margem">Margem de lucro desejada</label>
+              <div class="field-input"><input type="number" id="f_margem" value="40" min="0" step="1"><span class="suffix">%</span></div>
+            </div>
+          </div>
+        </fieldset>
+
+      </div>
+
+      <!-- RESIN FORM -->
+      <div class="card" id="form-resin" style="display:none;">
+
+        <fieldset>
+          <legend>Material do estoque</legend>
+          <div class="field-row">
+            <div class="field" style="grid-column:1/-1;">
+              <label for="r_materialSelect">Usar resina cadastrada</label>
+              <select id="r_materialSelect" class="material-select">
+                <option value="">— Preço manual —</option>
+              </select>
+              <p class="hint">Selecionar um material preenche o preço automaticamente e desconta do estoque quando você aprovar o orçamento.</p>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Peça</legend>
+          <div class="field-row">
+            <div class="field">
+              <label for="r_volume">Volume da peça</label>
+              <div class="field-input"><input type="number" id="r_volume" value="18" min="0" step="0.1"><span class="suffix">ml</span></div>
+            </div>
+            <div class="field">
+              <label for="r_precoResina">Preço da resina (litro)</label>
+              <div class="field-input"><input type="number" id="r_precoResina" value="150" min="0" step="1"><span class="suffix">R$/L</span></div>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="r_desperdicio">Desperdício (suportes/purga)</label>
+              <div class="field-input"><input type="number" id="r_desperdicio" value="18" min="0" step="1"><span class="suffix">%</span></div>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Impressão</legend>
+          <div class="field-row">
+            <div class="field">
+              <label for="r_tempo">Tempo de impressão + pós-cura</label>
+              <div class="field-input"><input type="number" id="r_tempo" value="2.5" min="0" step="0.1"><span class="suffix">h</span></div>
+            </div>
+            <div class="field">
+              <label for="r_potencia">Potência (impressora + cura UV)</label>
+              <div class="field-input"><input type="number" id="r_potencia" value="70" min="0" step="1"><span class="suffix">W</span></div>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="r_tarifa">Tarifa de energia</label>
+              <div class="field-input"><input type="number" id="r_tarifa" value="0.85" min="0" step="0.01"><span class="suffix">R$/kWh</span></div>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Equipamento</legend>
+          <div class="field-row">
+            <div class="field">
+              <label for="r_precoImp">Valor da impressora</label>
+              <div class="field-input"><input type="number" id="r_precoImp" value="1800" min="0" step="10"><span class="suffix">R$</span></div>
+            </div>
+            <div class="field">
+              <label for="r_vidaUtil">Vida útil estimada</label>
+              <div class="field-input"><input type="number" id="r_vidaUtil" value="1500" min="1" step="10"><span class="suffix">h</span></div>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Consumíveis da resina</legend>
+          <div class="field-row">
+            <div class="field">
+              <label for="r_consumiveis">Luvas, álcool isopropílico, FEP, filtros (por peça)</label>
+              <div class="field-input"><input type="number" id="r_consumiveis" value="3" min="0" step="0.1"><span class="suffix">R$</span></div>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Mão de obra</legend>
+          <div class="field-row">
+            <div class="field">
+              <label for="r_horasMO">Lavagem, remoção de suporte, cura, pintura</label>
+              <div class="field-input"><input type="number" id="r_horasMO" value="0.4" min="0" step="0.05"><span class="suffix">h</span></div>
+            </div>
+            <div class="field">
+              <label for="r_valorHora">Valor da sua hora</label>
+              <div class="field-input"><input type="number" id="r_valorHora" value="25" min="0" step="1"><span class="suffix">R$/h</span></div>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Margens</legend>
+          <div class="field-row">
+            <div class="field">
+              <label for="r_falha">Margem para falhas de impressão</label>
+              <div class="field-input"><input type="number" id="r_falha" value="12" min="0" step="1"><span class="suffix">%</span></div>
+            </div>
+            <div class="field">
+              <label for="r_margem">Margem de lucro desejada</label>
+              <div class="field-input"><input type="number" id="r_margem" value="40" min="0" step="1"><span class="suffix">%</span></div>
+            </div>
+          </div>
+        </fieldset>
+
+      </div>
+
+    </div>
+
+    <!-- ===================== RESULTS ===================== -->
+    <div class="sticky">
+      <div class="card">
+        <p class="result-title">Custo total por peça</p>
+        <p class="result-price mono" id="out_custo">R$ 0,00</p>
+        <p class="result-sub" id="out_custoSub">material + energia + equipamento + mão de obra + falhas</p>
+
+        <div class="layers" id="layers"></div>
+        <div class="legend" id="legend"></div>
+
+        <div class="divider"></div>
+
+        <p class="result-title">Preço sugerido (venda pessoal)</p>
+        <p class="result-price mono" id="out_precoPessoal" style="font-size:30px;">R$ 0,00</p>
+        <p class="result-sub" id="out_lucroPessoal">lucro líquido por peça</p>
+      </div>
+
+      <div class="card">
+        <p class="result-title" style="margin-bottom:14px;">Canais de venda</p>
+        <div id="marketplaces"></div>
+        <p class="disclaimer">Taxas de marketplace variam por categoria de produto e forma de envio. Os valores acima são referências editáveis — confirme a taxa atual direto na plataforma antes de precificar.</p>
+      </div>
+
+      <div class="card approve-card">
+        <p class="result-title" style="margin-bottom:8px;">Aprovou o preço?</p>
+        <p class="hint" style="margin-bottom:14px;">Envie direto para a aba Orçamentos, já com os valores calculados aqui. Você poderá ajustar o valor final antes de salvar.</p>
+        <button type="button" class="approve-btn" id="btnApprove">Aprovar e enviar para Orçamento →</button>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Precifica3D — feito para makers que vendem o que imprimem.</span>
+    <span>Preço final = Custo total ÷ (1 − margem − taxa)</span>
+  </div>
+</footer>
+
+</div>
+
+<div id="view-materiais" class="view">
+  <div class="wrap">
+    <header class="top">
+      <div>
+        <p class="eyebrow">Estoque</p>
+        <h1>Materiais</h1>
+      </div>
+      <button class="btn-new" id="btnNewMaterial">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+        <span>Novo material</span>
+      </button>
+    </header>
+    <p class="mat-intro">Cadastre seus filamentos e resinas aqui. Eles aparecem como opção na aba Precificação — ao aprovar um orçamento, a quantidade usada é descontada automaticamente do estoque.</p>
+    <div id="matContent"></div>
+  </div>
+</div>
+
+<div id="modalRoot"></div>
+<div id="toastRoot"></div>
+<div id="savingRoot"></div>
+
+<!-- ===================== SUPABASE ===================== -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  // 1) Cole aqui a URL e a chave "anon public" do seu projeto Supabase
+  //    (Project Settings → API, no painel do Supabase)
+  const SUPABASE_URL = "COLE_AQUI_A_URL_DO_SEU_PROJETO";
+  const SUPABASE_ANON_KEY = "COLE_AQUI_SUA_CHAVE_ANON_PUBLIC";
+
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // Ponte: reimplementa window.storage (usado no restante do código)
+  // usando a tabela "app_storage" do Supabase como banco de dados real.
+  window.storage = {
+    async get(key /*, shared */){
+      const { data, error } = await sb
+        .from("app_storage")
+        .select("value")
+        .eq("key", key)
+        .maybeSingle();
+      if(error) throw error;
+      if(!data) return null;
+      return { key, value: data.value };
+    },
+    async set(key, value /*, shared */){
+      const { error } = await sb
+        .from("app_storage")
+        .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
+      if(error) throw error;
+      return { key, value };
+    }
+  };
+</script>
+
+<script>
+
+const STATUS = {
+  orcamento: { label: "ORÇAMENTO", cls: "orcamento" },
+  andamento: { label: "EM ANDAMENTO", cls: "andamento" },
+  fechado: { label: "FECHADO", cls: "fechado" },
+};
+const DOW = ["D","S","T","Q","Q","S","S"];
+const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+let services = [];
+let tab = "dashboard";
+let viewDate = new Date(); // month/year currently viewed
+viewDate.setDate(1);
+let showAllPeriods = false;
+
+function fmtBRL(n){
+  const v = Number(n) || 0;
+  return v.toLocaleString("pt-BR", { style:"currency", currency:"BRL" });
+}
+function fmtDateTime(d){
+  if(!d) return "";
+  const dt = new Date(d);
+  const date = dt.toLocaleDateString("pt-BR");
+  const time = dt.toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" });
+  return `${date} às ${time}`;
+}
+function sameMonth(dateStr, ref){
+  if(!dateStr) return false;
+  const d = new Date(dateStr);
+  return d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
+}
+function sameDay(dateStr, ref){
+  if(!dateStr) return false;
+  const d = new Date(dateStr);
+  return d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth() && d.getDate() === ref.getDate();
+}
+function uid(){
+  return crypto.randomUUID ? crypto.randomUUID() : 'id-'+Date.now()+'-'+Math.random().toString(16).slice(2);
+}
+function escapeHtml(s){
+  return String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---------- Persistence ----------
+async function loadData(){
+  try{
+    const res = await window.storage.get("servicos", false);
+    if(res && res.value){
+      services = JSON.parse(res.value);
+    }
+  }catch(e){
+    // no data yet, that's fine
+  }
+}
+
+async function persist(next){
+  services = next;
+  showSaving(true);
+  try{
+    await window.storage.set("servicos", JSON.stringify(services), false);
+  }catch(e){
+    showToast("Não foi possível salvar. Tente novamente.");
+  }finally{
+    showSaving(false);
+  }
+  render();
+}
+
+function showToast(msg){
+  const root = document.getElementById("toastRoot");
+  root.innerHTML = `<div class="toast">${escapeHtml(msg)}</div>`;
+  setTimeout(()=>{ root.innerHTML=""; }, 3000);
+}
+function showSaving(on){
+  const root = document.getElementById("savingRoot");
+  root.innerHTML = on ? `<div class="saving"><svg class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>salvando</div>` : "";
+}
+
+// ---------- CRUD ----------
+function newService(data){
+  const now = new Date().toISOString();
+  const item = {
+    ...data,
+    id: uid(),
+    dataCriacao: now,
+    dataFechamento: data.status === "fechado" ? now : null,
+  };
+  persist([item, ...services]);
+}
+
+function updateService(data){
+  const now = new Date().toISOString();
+  const prev = services.find(s => s.id === data.id);
+  const wasNotFechado = prev && prev.status !== "fechado";
+  const next = services.map(s => s.id === data.id ? {
+    ...data,
+    dataFechamento: data.status === "fechado"
+      ? (s.dataFechamento || (wasNotFechado ? now : s.dataFechamento))
+      : null,
+  } : s);
+  persist(next);
+}
+
+function deleteService(id){
+  persist(services.filter(s => s.id !== id));
+}
+
+// Move to another status. When closing a service, auto-copy the quoted
+// value/estimated cost into received/actual-cost so it starts identical
+// to the budget — the user can still open "editar" to correct it.
+function moveStatus(id, newStatus){
+  const now = new Date().toISOString();
+  const next = services.map(s => {
+    if(s.id !== id) return s;
+    const updated = { ...s, status: newStatus };
+    if(newStatus === "fechado"){
+      updated.dataFechamento = s.dataFechamento || now;
+      if(updated.valorRecebido === "" || updated.valorRecebido == null){
+        updated.valorRecebido = s.valorOrcado ?? "";
+      }
+      if(updated.custoReal === "" || updated.custoReal == null){
+        updated.custoReal = s.custoEstimado ?? "";
+      }
+    } else {
+      updated.dataFechamento = null;
+    }
+    return updated;
+  });
+  persist(next);
+}
+
+// ---------- Derived data ----------
+function inScope(item, field){
+  if(showAllPeriods) return true;
+  return sameMonth(item[field], viewDate);
+}
+
+function grouped(){
+  return {
+    orcamento: services.filter(s => s.status === "orcamento" && inScope(s, "dataCriacao")),
+    andamento: services.filter(s => s.status === "andamento" && inScope(s, "dataCriacao")),
+    fechado: services.filter(s => s.status === "fechado" && inScope(s, "dataFechamento")),
+  };
+}
+
+function metrics(g){
+  const fechados = g.fechado;
+  const totalRecebido = fechados.reduce((a,s)=>a+(Number(s.valorRecebido)||0),0);
+  const totalGasto = fechados.reduce((a,s)=>a+(Number(s.custoReal)||0),0);
+  const lucroTotal = totalRecebido - totalGasto;
+  const rentabilidade = totalRecebido > 0 ? (lucroTotal/totalRecebido)*100 : 0;
+  const totalOrcado = g.orcamento.reduce((a,s)=>a+(Number(s.valorOrcado)||0),0);
+  const totalAndamento = g.andamento.reduce((a,s)=>a+(Number(s.valorOrcado)||0),0);
+  const custoEstimadoAndamento = g.andamento.reduce((a,s)=>a+(Number(s.custoEstimado)||0),0);
+  return { totalRecebido, totalGasto, lucroTotal, rentabilidade, totalOrcado, totalAndamento, custoEstimadoAndamento, qtdFechados: fechados.length };
+}
+
+// ---------- Rendering ----------
+function render(){
+  document.getElementById("monthLabel").textContent = `${MONTHS[viewDate.getMonth()]} ${viewDate.getFullYear()}`;
+  document.getElementById("toggleAll").classList.toggle("on", showAllPeriods);
+  document.getElementById("toggleAll").textContent = showAllPeriods ? "Voltar a ver por mês" : "Ver todos os períodos";
+  document.querySelector(".month-nav").style.opacity = showAllPeriods ? .45 : 1;
+  document.querySelector(".month-nav").style.pointerEvents = showAllPeriods ? "none" : "auto";
+
+  const g = grouped();
+  document.getElementById("cntOrc").textContent = g.orcamento.length;
+  document.getElementById("cntAnd").textContent = g.andamento.length;
+  document.getElementById("cntFec").textContent = g.fechado.length;
+
+  document.querySelectorAll(".tab-btn").forEach(btn=>{
+    btn.classList.toggle("active", btn.dataset.tab === tab);
+  });
+
+  const content = document.getElementById("content");
+  if(tab === "dashboard"){
+    content.innerHTML = renderDashboard(g);
+  } else {
+    content.innerHTML = renderList(g[tab], tab, false);
+  }
+  attachListActions();
+}
+
+function stampHtml(status){
+  const s = STATUS[status];
+  return `<span class="stamp ${s.cls}">${s.label}</span>`;
+}
+
+function renderCalendar(){
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+  const today = new Date();
+  const firstDow = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+
+  // days that have any activity (created or closed) this month
+  const activeDays = new Set();
+  services.forEach(s=>{
+    const c = new Date(s.dataCriacao);
+    if(c.getFullYear()===year && c.getMonth()===month) activeDays.add(c.getDate());
+    if(s.dataFechamento){
+      const f = new Date(s.dataFechamento);
+      if(f.getFullYear()===year && f.getMonth()===month) activeDays.add(f.getDate());
+    }
+  });
+
+  let cells = "";
+  for(let i=0;i<firstDow;i++) cells += `<div class="cal-cell blank"></div>`;
+  for(let d=1; d<=daysInMonth; d++){
+    const isToday = today.getFullYear()===year && today.getMonth()===month && today.getDate()===d;
+    const hasDot = activeDays.has(d);
+    cells += `<div class="cal-cell ${isToday?'today':''}">${d}${hasDot?'<span class="dot"></span>':''}</div>`;
+  }
+
+  return `<div class="cal-card">
+    <div class="cal-head">
+      <p class="cal-title">Calendário — ${MONTHS[month]} ${year}</p>
+    </div>
+    <div class="cal-grid">
+      ${DOW.map(d=>`<div class="cal-dow">${d}</div>`).join("")}
+      ${cells}
+    </div>
+    <div class="cal-foot"><span class="dotlegend"></span> dia com serviço criado ou fechado · hoje é ${today.toLocaleDateString("pt-BR")}</div>
+  </div>`;
+}
+
+function renderDashboard(g){
+  const isEmpty = g.orcamento.length===0 && g.andamento.length===0 && g.fechado.length===0;
+  const calHtml = renderCalendar();
+
+  if(isEmpty){
+    return `<div class="grid-two with-cal">
+      <div class="empty">
+        <p class="big">Nada lançado ${showAllPeriods ? "ainda" : "neste período"}</p>
+        <p class="small">${showAllPeriods ? "Cadastre seu primeiro orçamento para começar a acompanhar os números." : "Tente outro mês ou cadastre um novo serviço."}</p>
+      </div>
+      ${calHtml}
+    </div>`;
+  }
+  const m = metrics(g);
+  let html = `<div class="grid-metrics">
+    <div class="card">
+      <p class="metric-label">Recebido (fechados)</p>
+      <p class="metric-value">${fmtBRL(m.totalRecebido)}</p>
+      <p class="metric-sub">${m.qtdFechados} serviço(s)</p>
+    </div>
+    <div class="card">
+      <p class="metric-label">Gasto (fechados)</p>
+      <p class="metric-value tone-negative">${fmtBRL(m.totalGasto)}</p>
+    </div>
+    <div class="card">
+      <p class="metric-label">Lucro</p>
+      <p class="metric-value ${m.lucroTotal>=0?'tone-positive':'tone-negative'}">${fmtBRL(m.lucroTotal)}</p>
+    </div>
+    <div class="card">
+      <p class="metric-label">Rentabilidade média</p>
+      <p class="metric-value ${m.rentabilidade>=0?'tone-positive':'tone-negative'}">${m.rentabilidade.toFixed(1)}%</p>
+    </div>
+  </div>
+
+  <div class="grid-two with-cal">
+    <div style="display:flex;flex-direction:column;gap:16px;">
+      <div class="card">
+        <div class="row-between">
+          <p class="metric-label" style="margin:0;">Em orçamento</p>
+          ${stampHtml('orcamento')}
+        </div>
+        <p style="font-family:'Lora',serif;font-size:20px;font-weight:600;color:var(--white);margin:0;">${fmtBRL(m.totalOrcado)}</p>
+        <p class="metric-sub">potencial em ${g.orcamento.length} proposta(s) aguardando fechamento</p>
+      </div>
+      <div class="card">
+        <div class="row-between">
+          <p class="metric-label" style="margin:0;">Em andamento</p>
+          ${stampHtml('andamento')}
+        </div>
+        <p style="font-family:'Lora',serif;font-size:20px;font-weight:600;color:var(--white);margin:0;">${fmtBRL(m.totalAndamento)}</p>
+        <p class="metric-sub">custo estimado de ${fmtBRL(m.custoEstimadoAndamento)} em ${g.andamento.length} serviço(s)</p>
+      </div>
+    </div>
+    ${calHtml}
+  </div>`;
+
+  if(g.fechado.length > 0){
+    html += `<p class="metric-label" style="color:var(--gray-2);margin-bottom:8px;">Fechados no período</p>`;
+    html += renderList(g.fechado.slice(0,3), "fechado", true);
+  }
+  return html;
+}
+
+function renderList(items, status, compact){
+  if(items.length === 0){
+    return `<div class="empty"><p class="small">Nada por aqui ${showAllPeriods ? "" : "neste mês"}.</p></div>`;
+  }
+  return `<div class="list">` + items.map(item => renderItem(item, status, compact)).join("") + `</div>`;
+}
+
+function renderItem(item, status, compact){
+  const lucro = (Number(item.valorRecebido)||0) - (Number(item.custoReal)||0);
+  const rent = item.status === "fechado" && Number(item.valorRecebido) > 0
+    ? (lucro / Number(item.valorRecebido)) * 100
+    : null;
+
+  let numsHtml = "";
+  if(status === "orcamento"){
+    numsHtml = numHtml("Orçado", fmtBRL(item.valorOrcado));
+  } else if(status === "andamento"){
+    numsHtml = numHtml("Orçado", fmtBRL(item.valorOrcado)) + numHtml("Custo est.", fmtBRL(item.custoEstimado));
+  } else if(status === "fechado"){
+    numsHtml = numHtml("Recebido", fmtBRL(item.valorRecebido))
+      + numHtml("Gasto", fmtBRL(item.custoReal))
+      + numHtml("Lucro", fmtBRL(lucro), lucro>=0?"var(--green)":"var(--red)");
+    if(rent !== null){
+      numsHtml += numHtml("Rentab.", rent.toFixed(1)+"%", rent>=0?"var(--green)":"var(--red)");
+    }
+  }
+
+  let dateLine = `Criado ${fmtDateTime(item.dataCriacao)}`;
+  if(item.status === "fechado" && item.dataFechamento){
+    dateLine += ` · Fechado ${fmtDateTime(item.dataFechamento)}`;
+  }
+
+  let actionsHtml = "";
+  if(!compact){
+    let moveBtn = "";
+    if(status === "orcamento"){
+      moveBtn = `<button class="icon-btn" title="Marcar em andamento" data-action="move" data-status="andamento" data-id="${item.id}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </button>`;
+    } else if(status === "andamento"){
+      moveBtn = `<button class="icon-btn" title="Marcar como fechado (copia os valores do orçamento)" data-action="move" data-status="fechado" data-id="${item.id}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg>
+      </button>`;
+    }
+    actionsHtml = `<div class="item-actions">
+      ${moveBtn}
+      <button class="icon-btn" title="Editar" data-action="edit" data-id="${item.id}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+      </button>
+      <button class="icon-btn danger" title="Excluir" data-action="delete" data-id="${item.id}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>
+      </button>
+    </div>`;
+  }
+
+  return `<div class="item">
+    <div class="item-main">
+      <div class="item-top">
+        ${stampHtml(item.status)}
+        <span class="item-date">${dateLine}</span>
+      </div>
+      <p class="item-client">${escapeHtml(item.cliente) || "Cliente sem nome"}</p>
+      <p class="item-desc">${escapeHtml(item.descricao) || "—"}</p>
+    </div>
+    <div class="item-nums">${numsHtml}</div>
+    ${actionsHtml}
+  </div>`;
+}
+
+function numHtml(label, value, color){
+  return `<div class="num">
+    <p class="num-label">${label}</p>
+    <p class="num-value" style="${color?`color:${color}`:''}">${value}</p>
+  </div>`;
+}
+
+function attachListActions(){
+  document.querySelectorAll('[data-action="edit"]').forEach(btn=>{
+    btn.onclick = () => openModal("edit", services.find(s=>s.id===btn.dataset.id));
+  });
+  document.querySelectorAll('[data-action="delete"]').forEach(btn=>{
+    btn.onclick = () => openConfirm(services.find(s=>s.id===btn.dataset.id));
+  });
+  document.querySelectorAll('[data-action="move"]').forEach(btn=>{
+    btn.onclick = () => moveStatus(btn.dataset.id, btn.dataset.status);
+  });
+}
+
+// ---------- Modal ----------
+const emptyForm = { cliente:"", descricao:"", valorOrcado:"", custoEstimado:"", custoReal:"", valorRecebido:"", status:"orcamento" };
+
+function openModal(mode, data){
+  const form = mode === "new" ? {...emptyForm} : {...data};
+  const root = document.getElementById("modalRoot");
+  root.innerHTML = `
+  <div class="overlay" id="modalOverlay">
+    <form class="modal" id="modalForm">
+      <div class="modal-head">
+        <h2>${mode === "new" ? "Novo serviço" : "Editar serviço"}</h2>
+        <button type="button" id="modalClose">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="field">
+        <label>Cliente</label>
+        <input id="f_cliente" required value="${escapeHtml(form.cliente)}" placeholder="Nome do cliente" />
+      </div>
+      <div class="field">
+        <label>Descrição do serviço</label>
+        <textarea id="f_descricao" placeholder="O que será feito">${escapeHtml(form.descricao)}</textarea>
+      </div>
+      <div class="field">
+        <label>Status</label>
+        <select id="f_status">
+          <option value="orcamento" ${form.status==='orcamento'?'selected':''}>Orçamento</option>
+          <option value="andamento" ${form.status==='andamento'?'selected':''}>Em andamento</option>
+          <option value="fechado" ${form.status==='fechado'?'selected':''}>Fechado</option>
+        </select>
+      </div>
+      <div class="field-row" style="margin-bottom:16px;">
+        <div class="field" style="margin-bottom:0;">
+          <label>Valor orçado (R$)</label>
+          <input type="number" step="0.01" id="f_valorOrcado" value="${escapeHtml(form.valorOrcado)}" placeholder="0,00" />
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label>Custo estimado (R$)</label>
+          <input type="number" step="0.01" id="f_custoEstimado" value="${escapeHtml(form.custoEstimado)}" placeholder="0,00" />
+        </div>
+      </div>
+      <div id="autofillNote" class="autofill-note hidden">Ao fechar, os campos abaixo já vêm preenchidos com o valor orçado. Ajuste aqui se o valor final foi diferente.</div>
+      <div class="field-row" id="fechadoFields" style="display:${form.status==='fechado'?'grid':'none'};margin-bottom:16px;">
+        <div class="field" style="margin-bottom:0;">
+          <label>Valor recebido (R$)</label>
+          <input type="number" step="0.01" id="f_valorRecebido" value="${escapeHtml(form.valorRecebido)}" placeholder="0,00" />
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label>Custo real (R$)</label>
+          <input type="number" step="0.01" id="f_custoReal" value="${escapeHtml(form.custoReal)}" placeholder="0,00" />
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="modalCancel">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+      </div>
+    </form>
+  </div>`;
+
+  document.getElementById("f_status").onchange = (e) => {
+    const isFechado = e.target.value === "fechado";
+    document.getElementById("fechadoFields").style.display = isFechado ? "grid" : "none";
+    document.getElementById("autofillNote").classList.toggle("hidden", !isFechado);
+    if(isFechado){
+      const recebidoInput = document.getElementById("f_valorRecebido");
+      const custoRealInput = document.getElementById("f_custoReal");
+      if(!recebidoInput.value) recebidoInput.value = document.getElementById("f_valorOrcado").value || "";
+      if(!custoRealInput.value) custoRealInput.value = document.getElementById("f_custoEstimado").value || "";
+    }
+  };
+  if(form.status === "fechado"){
+    document.getElementById("autofillNote").classList.remove("hidden");
+  }
+
+  document.getElementById("modalClose").onclick = closeModal;
+  document.getElementById("modalCancel").onclick = closeModal;
+  document.getElementById("modalOverlay").onclick = (e) => { if(e.target.id === "modalOverlay") closeModal(); };
+  document.getElementById("f_cliente").focus();
+
+  document.getElementById("modalForm").onsubmit = (e) => {
+    e.preventDefault();
+    const cliente = document.getElementById("f_cliente").value.trim();
+    if(!cliente) return;
+    const payload = {
+      id: form.id,
+      cliente,
+      descricao: document.getElementById("f_descricao").value,
+      status: document.getElementById("f_status").value,
+      valorOrcado: document.getElementById("f_valorOrcado").value,
+      custoEstimado: document.getElementById("f_custoEstimado").value,
+      valorRecebido: document.getElementById("f_valorRecebido").value,
+      custoReal: document.getElementById("f_custoReal").value,
+    };
+    if(mode === "new"){ newService(payload); } else { updateService(payload); }
+    closeModal();
+  };
+}
+
+function closeModal(){
+  document.getElementById("modalRoot").innerHTML = "";
+}
+
+function openConfirm(item){
+  const root = document.getElementById("modalRoot");
+  root.innerHTML = `
+  <div class="overlay" id="confirmOverlay">
+    <div class="modal" style="max-width:380px;">
+      <p style="font-family:'Lora',serif;font-weight:600;color:var(--white);margin:0 0 4px;">Excluir "${escapeHtml(item.cliente)}"?</p>
+      <p style="font-size:14px;color:var(--gray);margin:0 0 20px;">Essa ação não pode ser desfeita.</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="confirmCancel">Cancelar</button>
+        <button class="btn btn-danger" id="confirmDelete">Excluir</button>
+      </div>
+    </div>
+  </div>`;
+  document.getElementById("confirmOverlay").onclick = (e) => { if(e.target.id==="confirmOverlay") closeModal(); };
+  document.getElementById("confirmCancel").onclick = closeModal;
+  document.getElementById("confirmDelete").onclick = () => { deleteService(item.id); closeModal(); };
+}
+
+// ---------- Month navigation ----------
+document.getElementById("prevMonth").onclick = () => { viewDate.setMonth(viewDate.getMonth()-1); render(); };
+document.getElementById("nextMonth").onclick = () => { viewDate.setMonth(viewDate.getMonth()+1); render(); };
+document.getElementById("todayBtn").onclick = () => { viewDate = new Date(); viewDate.setDate(1); showAllPeriods=false; render(); };
+document.getElementById("toggleAll").onclick = () => { showAllPeriods = !showAllPeriods; render(); };
+
+// ---------- Init ----------
+document.getElementById("btnNew").onclick = () => openModal("new", null);
+document.querySelectorAll(".tab-btn").forEach(btn=>{
+  btn.onclick = () => { tab = btn.dataset.tab; render(); };
+});
+
+function updateNewLabel(){
+  document.querySelector(".new-label").style.display = window.innerWidth >= 640 ? "inline" : "none";
+}
+window.addEventListener("resize", updateNewLabel);
+updateNewLabel();
+
+(async function init(){
+  await loadData();
+  document.getElementById("loadingScreen").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+  render();
+})();
+
+</script>
+
+<script>
+
+(function(){
+
+  const viewRoot = document.getElementById('view-precificacao');
+  let selectedMaterialFilamento = '';
+  let selectedMaterialResina = '';
+  let lastSnapshot = null;
+
+  const LAYER_DEFS = [
+    { key:'material',      label:'Material',       },
+    { key:'energia',       label:'Energia',        },
+    { key:'depreciacao',   label:'Equipamento',    },
+    { key:'consumiveis',   label:'Consumíveis',    },
+    { key:'maoDeObra',     label:'Mão de obra',    },
+    { key:'falha',         label:'Margem de falha' },
+  ];
+
+  // shade steps applied via color-mix, index 0 = bottom (material)
+  const SHADE = [0,14,28,42,56,70]; // % black mixed in
+
+  let marketplaces = [
+    { id:'pessoal', name:'Venda pessoal', commission:0,  freight:0, fixed:0, enabled:true, note:'use "comissão" aqui caso cobre taxa de maquininha/cartão' },
+    { id:'shopee',  name:'Shopee',        commission:14, freight:6, fixed:4, enabled:true, note:'14% comissão + 6% frete grátis obrigatório + taxa fixa (R$4 a R$26 conforme faixa de preço)' },
+    { id:'ml',      name:'Mercado Livre', commission:16, freight:0, fixed:0, enabled:true, note:'ajuste conforme sua categoria — ainda não confirmado' },
+    { id:'amazon',  name:'Amazon',        commission:15, freight:0, fixed:0, enabled:true, note:'ajuste conforme sua categoria — ainda não confirmado' },
+  ];
+
+  function val(id){
+    const el = document.getElementById(id);
+    const n = parseFloat(el.value);
+    return isNaN(n) ? 0 : n;
+  }
+
+  function brl(n){
+    if(!isFinite(n)) return '—';
+    return n.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+  }
+
+  function calcFilament(){
+    const peso = val('f_peso');
+    const precoKg = val('f_precoFil');
+    const tempo = val('f_tempo');
+    const potenciaW = val('f_potencia');
+    const tarifa = val('f_tarifa');
+    const precoImp = val('f_precoImp');
+    const vidaUtil = val('f_vidaUtil') || 1;
+    const consumiveis = val('f_consumiveis');
+    const horasMO = val('f_horasMO');
+    const valorHora = val('f_valorHora');
+    const falhaPct = val('f_falha');
+    const margemPct = val('f_margem');
+
+    const material = peso * (precoKg/1000);
+    const energia = (potenciaW/1000) * tempo * tarifa;
+    const depreciacao = (precoImp/vidaUtil) * tempo;
+    const maoDeObra = horasMO * valorHora;
+    const subtotal = material + energia + depreciacao + consumiveis + maoDeObra;
+    const falha = subtotal * (falhaPct/100);
+    const custoTotal = subtotal + falha;
+
+    return { material, energia, depreciacao, consumiveis, maoDeObra, falha, custoTotal, margemPct };
+  }
+
+  function calcResin(){
+    const volume = val('r_volume');
+    const precoL = val('r_precoResina');
+    const desperdicioPct = val('r_desperdicio');
+    const tempo = val('r_tempo');
+    const potenciaW = val('r_potencia');
+    const tarifa = val('r_tarifa');
+    const precoImp = val('r_precoImp');
+    const vidaUtil = val('r_vidaUtil') || 1;
+    const consumiveis = val('r_consumiveis');
+    const horasMO = val('r_horasMO');
+    const valorHora = val('r_valorHora');
+    const falhaPct = val('r_falha');
+    const margemPct = val('r_margem');
+
+    const volumeReal = volume * (1 + desperdicioPct/100);
+    const material = volumeReal * (precoL/1000);
+    const energia = (potenciaW/1000) * tempo * tarifa;
+    const depreciacao = (precoImp/vidaUtil) * tempo;
+    const maoDeObra = horasMO * valorHora;
+    const subtotal = material + energia + depreciacao + consumiveis + maoDeObra;
+    const falha = subtotal * (falhaPct/100);
+    const custoTotal = subtotal + falha;
+
+    return { material, energia, depreciacao, consumiveis, maoDeObra, falha, custoTotal, margemPct };
+  }
+
+  function priceForChannel(custoTotal, margemPct, pctFees, fixedFee){
+    const denom = 1 - (margemPct/100) - (pctFees/100);
+    if(denom <= 0.001) return { price:null, profit:null };
+    const price = (custoTotal + fixedFee) / denom;
+    const profit = price - custoTotal - price*(pctFees/100) - fixedFee;
+    return { price, profit };
+  }
+
+  function renderLayers(result){
+    const container = document.getElementById('layers');
+    const legend = document.getElementById('legend');
+    container.innerHTML = '';
+    legend.innerHTML = '';
+
+    LAYER_DEFS.forEach((def, i) => {
+      const v = result[def.key];
+      const grow = Math.max(v, 0.0001);
+      const layer = document.createElement('div');
+      layer.className = 'layer';
+      layer.style.flexGrow = grow;
+      layer.style.background = `color-mix(in srgb, var(--accent) ${100-SHADE[i]}%, black ${SHADE[i]}%)`;
+      layer.innerHTML = `<span>${def.label}</span><span class="v">${brl(v)}</span>`;
+      container.appendChild(layer);
+
+      const item = document.createElement('div');
+      item.className = 'legend-item';
+      item.innerHTML = `<span class="legend-dot" style="background:color-mix(in srgb, var(--accent) ${100-SHADE[i]}%, black ${SHADE[i]}%)"></span>${def.label}`;
+      legend.appendChild(item);
+    });
+  }
+
+  function renderMarketplaces(custoTotal, margemPct){
+    const wrap = document.getElementById('marketplaces');
+    wrap.innerHTML = '';
+
+    marketplaces.forEach(mk => {
+      const card = document.createElement('div');
+      card.className = 'mk-card';
+
+      const pctFees = mk.commission + mk.freight;
+      const { price, profit } = priceForChannel(custoTotal, margemPct, mk.enabled ? pctFees : 0, mk.enabled ? mk.fixed : 0);
+      const overLimit = price === null;
+
+      card.innerHTML = `
+        <div class="mk-top">
+          <span class="mk-name">${mk.name}</span>
+          <label class="switch">
+            <input type="checkbox" data-id="${mk.id}" class="mk-toggle" ${mk.enabled ? 'checked' : ''}>
+            <span class="track"></span><span class="thumb"></span>
+          </label>
+        </div>
+        <div class="mk-body mk-body-5 ${mk.enabled ? '' : 'disabled'}">
+          <div class="field">
+            <label>Comissão</label>
+            <div class="mk-fee-wrap mk-fee-input">
+              <input type="number" min="0" step="0.5" value="${mk.commission}" class="mk-field" data-id="${mk.id}" data-prop="commission">
+              <span class="pct">%</span>
+            </div>
+          </div>
+          <div class="field">
+            <label>Frete</label>
+            <div class="mk-fee-wrap mk-fee-input">
+              <input type="number" min="0" step="0.5" value="${mk.freight}" class="mk-field" data-id="${mk.id}" data-prop="freight">
+              <span class="pct">%</span>
+            </div>
+          </div>
+          <div class="field">
+            <label>Taxa fixa</label>
+            <div class="mk-fee-wrap mk-fee-input">
+              <input type="number" min="0" step="0.5" value="${mk.fixed}" class="mk-field" data-id="${mk.id}" data-prop="fixed">
+              <span class="pct">R$</span>
+            </div>
+          </div>
+          <div class="mk-out">
+            <div class="lbl">Preço sugerido</div>
+            <div class="val ${overLimit ? 'warn' : ''}">${overLimit ? '—' : brl(price)}</div>
+          </div>
+          <div class="mk-out">
+            <div class="lbl">Lucro líquido</div>
+            <div class="val ${overLimit ? 'warn' : 'profit'}">${overLimit ? '—' : brl(profit)}</div>
+          </div>
+        </div>
+        ${overLimit ? '<div class="warn-box">Taxas + margem de lucro somam 100% ou mais. Reduza a margem desejada ou as taxas do canal.</div>' : ''}
+        ${mk.note ? `<p class="hint" style="margin-top:8px;">${mk.note}</p>` : ''}
+      `;
+      wrap.appendChild(card);
+    });
+
+    wrap.querySelectorAll('.mk-toggle').forEach(el => {
+      el.addEventListener('change', e => {
+        const id = e.target.getAttribute('data-id');
+        marketplaces.find(m => m.id === id).enabled = e.target.checked;
+        recalc();
+      });
+    });
+    wrap.querySelectorAll('.mk-field').forEach(el => {
+      el.addEventListener('input', e => {
+        const id = e.target.getAttribute('data-id');
+        const prop = e.target.getAttribute('data-prop');
+        const v = parseFloat(e.target.value);
+        marketplaces.find(m => m.id === id)[prop] = isNaN(v) ? 0 : v;
+        recalc();
+      });
+    });
+  }
+
+  let activeTab = 'filament';
+
+  function recalc(){
+    const result = activeTab === 'filament' ? calcFilament() : calcResin();
+
+    document.getElementById('out_custo').textContent = brl(result.custoTotal);
+    renderLayers(result);
+
+    const personal = marketplaces.find(m => m.id === 'pessoal');
+    const personalPct = personal.commission + personal.freight;
+    const { price, profit } = priceForChannel(result.custoTotal, result.margemPct, personal.enabled ? personalPct : 0, personal.enabled ? personal.fixed : 0);
+    document.getElementById('out_precoPessoal').textContent = price === null ? '—' : brl(price);
+    document.getElementById('out_lucroPessoal').textContent = profit === null
+      ? 'ajuste a margem ou a taxa'
+      : `lucro líquido de ${brl(profit)} por peça`;
+
+    renderMarketplaces(result.custoTotal, result.margemPct);
+
+    const materialId = activeTab === 'filament' ? selectedMaterialFilamento : selectedMaterialResina;
+    const materiaisList = (window.Materiais && window.Materiais.list) ? window.Materiais.list() : [];
+    const materialObj = materiaisList.find(m => m.id === materialId) || null;
+    const quantidade = activeTab === 'filament'
+      ? val('f_peso')
+      : val('r_volume') * (1 + val('r_desperdicio')/100);
+
+    lastSnapshot = {
+      tipo: activeTab,
+      custoTotal: result.custoTotal,
+      precoSugerido: price,
+      lucroPessoal: profit,
+      materialId: materialObj ? materialObj.id : '',
+      materialNome: materialObj ? materialObj.nome : '',
+      quantidade: quantidade,
+      unidade: activeTab === 'filament' ? 'g' : 'ml',
+      descricaoSugerida: materialObj
+        ? `Peça em ${materialObj.nome} (${activeTab === 'filament' ? 'filamento' : 'resina'})`
+        : `Peça em ${activeTab === 'filament' ? 'filamento' : 'resina'}`
+    };
+  }
+
+  function refreshMaterialSelects(){
+    const list = (window.Materiais && window.Materiais.list) ? window.Materiais.list() : [];
+    const filSel = document.getElementById('f_materialSelect');
+    const resSel = document.getElementById('r_materialSelect');
+    if(!filSel || !resSel) return;
+
+    function fillSelect(select, tipo, selectedId){
+      const items = list.filter(m => m.tipo === tipo);
+      select.innerHTML = '<option value="">— Preço manual —</option>' + items.map(m => {
+        const unidade = tipo === 'filamento' ? 'g' : 'ml';
+        return `<option value="${m.id}">${m.nome} — estoque ${m.estoque.toFixed(0)}${unidade}</option>`;
+      }).join('');
+      select.value = items.find(i => i.id === selectedId) ? selectedId : '';
+    }
+    fillSelect(filSel, 'filamento', selectedMaterialFilamento);
+    fillSelect(resSel, 'resina', selectedMaterialResina);
+
+    filSel.onchange = () => {
+      selectedMaterialFilamento = filSel.value;
+      const m = list.find(i => i.id === filSel.value);
+      if(m){ document.getElementById('f_precoFil').value = m.preco; }
+      recalc();
+    };
+    resSel.onchange = () => {
+      selectedMaterialResina = resSel.value;
+      const m = list.find(i => i.id === resSel.value);
+      if(m){ document.getElementById('r_precoResina').value = m.preco; }
+      recalc();
+    };
+  }
+
+  window.Precifica3D = {
+    getSnapshot: () => lastSnapshot,
+    refreshSelects: () => { refreshMaterialSelects(); recalc(); }
+  };
+
+  function switchTab(tab){
+    activeTab = tab;
+    viewRoot.classList.toggle('tab-filament', tab === 'filament');
+    viewRoot.classList.toggle('tab-resin', tab === 'resin');
+    document.getElementById('btn-filament').classList.toggle('active', tab === 'filament');
+    document.getElementById('btn-resin').classList.toggle('active', tab === 'resin');
+    document.getElementById('form-filament').style.display = tab === 'filament' ? '' : 'none';
+    document.getElementById('form-resin').style.display = tab === 'resin' ? '' : 'none';
+    recalc();
+  }
+
+  document.getElementById('btn-filament').addEventListener('click', () => switchTab('filament'));
+  document.getElementById('btn-resin').addEventListener('click', () => switchTab('resin'));
+
+  document.querySelectorAll('#form-filament input, #form-resin input').forEach(el => {
+    el.addEventListener('input', recalc);
+  });
+
+  refreshMaterialSelects();
+  recalc();
+})();
+
+</script>
+
+<script>
+
+// ================= Main view switcher =================
+document.querySelectorAll('.main-switch button').forEach(btn=>{
+  btn.onclick = () => switchMainView(btn.dataset.view);
+});
+function switchMainView(view){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-' + view).classList.add('active');
+  document.querySelectorAll('.main-switch button').forEach(b=>b.classList.toggle('active', b.dataset.view === view));
+  if(view === 'precificacao' && window.Precifica3D){ window.Precifica3D.refreshSelects(); }
+}
+window.switchMainView = switchMainView;
+
+// ================= Materiais (estoque) =================
+let materiais = [];
+
+async function loadMateriais(){
+  try{
+    const res = await window.storage.get('materiais3d', false);
+    if(res && res.value) materiais = JSON.parse(res.value);
+  }catch(e){
+    // nenhum material cadastrado ainda
+  }
+}
+
+async function persistMateriais(next){
+  materiais = next;
+  showSaving(true);
+  try{
+    await window.storage.set('materiais3d', JSON.stringify(materiais), false);
+  }catch(e){
+    showToast('Não foi possível salvar o material. Tente novamente.');
+  }finally{
+    showSaving(false);
+  }
+  renderMateriaisView();
+  if(window.Precifica3D) window.Precifica3D.refreshSelects();
+}
+
+function newMaterialItem(data){
+  const item = { ...data, id: uid(), criadoEm: new Date().toISOString() };
+  persistMateriais([item, ...materiais]);
+}
+function updateMaterialItem(data){
+  persistMateriais(materiais.map(m => m.id === data.id ? { ...m, ...data } : m));
+}
+function deleteMaterialItem(id){
+  persistMateriais(materiais.filter(m => m.id !== id));
+}
+
+window.Materiais = {
+  list: () => materiais,
+  deduct(id, qty){
+    if(!id) return;
+    const idx = materiais.findIndex(m => m.id === id);
+    if(idx === -1) return;
+    const next = materiais.slice();
+    const atual = Number(next[idx].estoque) || 0;
+    next[idx] = { ...next[idx], estoque: Math.max(0, atual - (Number(qty) || 0)) };
+    persistMateriais(next);
+  }
+};
+
+function renderMateriaisView(){
+  const root = document.getElementById('matContent');
+  if(!root) return;
+  const filamentos = materiais.filter(m => m.tipo === 'filamento');
+  const resinas = materiais.filter(m => m.tipo === 'resina');
+
+  function section(title, items, unidade){
+    if(items.length === 0){
+      return `<p class="mat-section-title">${title}</p><div class="empty" style="margin-bottom:8px;"><p class="small">Nenhum material cadastrado ainda.</p></div>`;
+    }
+    return `<p class="mat-section-title">${title}</p><div class="mat-grid">` +
+      items.map(m => materialCardHtml(m, unidade)).join('') + `</div>`;
+  }
+
+  root.innerHTML = section('Filamentos', filamentos, 'g') + section('Resinas', resinas, 'ml');
+
+  root.querySelectorAll('[data-mat-edit]').forEach(btn=>{
+    btn.onclick = () => openMaterialModal('edit', materiais.find(m=>m.id===btn.dataset.matEdit));
+  });
+  root.querySelectorAll('[data-mat-delete]').forEach(btn=>{
+    btn.onclick = () => openMaterialDeleteConfirm(materiais.find(m=>m.id===btn.dataset.matDelete));
+  });
+}
+
+function materialCardHtml(m, unidade){
+  const precoLabel = m.tipo === 'filamento' ? 'R$/kg' : 'R$/L';
+  const low = Number(m.estoque) <= (m.tipo === 'filamento' ? 100 : 50);
+  return `<div class="mat-card">
+    <div class="mat-card-top">
+      <div>
+        <p class="mat-name">${escapeHtml(m.nome)}</p>
+        ${m.cor ? `<p class="mat-cor">${escapeHtml(m.cor)}</p>` : ''}
+      </div>
+    </div>
+    <div class="mat-nums">
+      <div>
+        <p class="mat-num-label">Preço</p>
+        <p class="mat-num-value">${fmtBRL(m.preco)} <span style="color:var(--gray-2);font-size:10px;">${precoLabel}</span></p>
+      </div>
+      <div style="text-align:right;">
+        <p class="mat-num-label">Estoque</p>
+        <p class="mat-num-value ${low ? 'low' : ''}">${(Number(m.estoque)||0).toFixed(0)}${unidade}</p>
+      </div>
+    </div>
+    <div class="mat-actions">
+      <button class="icon-btn" title="Editar" data-mat-edit="${m.id}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+      </button>
+      <button class="icon-btn danger" title="Excluir" data-mat-delete="${m.id}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>
+      </button>
+    </div>
+  </div>`;
+}
+
+const emptyMaterialForm = { tipo:'filamento', nome:'', cor:'', preco:'', estoque:'' };
+
+function openMaterialModal(mode, data){
+  const form = mode === 'new' ? {...emptyMaterialForm} : {...data};
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+  <div class="overlay" id="matModalOverlay">
+    <form class="modal" id="matModalForm">
+      <div class="modal-head">
+        <h2>${mode === 'new' ? 'Novo material' : 'Editar material'}</h2>
+        <button type="button" id="matModalClose">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="field">
+        <label>Tipo</label>
+        <select id="m_tipo">
+          <option value="filamento" ${form.tipo==='filamento'?'selected':''}>Filamento</option>
+          <option value="resina" ${form.tipo==='resina'?'selected':''}>Resina</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Nome / marca</label>
+        <input id="m_nome" required value="${escapeHtml(form.nome)}" placeholder="Ex: PLA Preto Voolt" />
+      </div>
+      <div class="field">
+        <label>Cor (opcional)</label>
+        <input id="m_cor" value="${escapeHtml(form.cor)}" placeholder="Ex: Preto" />
+      </div>
+      <div class="field-row" style="margin-bottom:16px;">
+        <div class="field" style="margin-bottom:0;">
+          <label id="m_precoLabel">Preço (R$/kg)</label>
+          <input type="number" step="0.01" id="m_preco" value="${escapeHtml(form.preco)}" placeholder="0,00" />
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label id="m_estoqueLabel">Estoque (g)</label>
+          <input type="number" step="1" id="m_estoque" value="${escapeHtml(form.estoque)}" placeholder="0" />
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="matModalCancel">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+      </div>
+    </form>
+  </div>`;
+
+  function syncLabels(){
+    const isResina = document.getElementById('m_tipo').value === 'resina';
+    document.getElementById('m_precoLabel').textContent = isResina ? 'Preço (R$/L)' : 'Preço (R$/kg)';
+    document.getElementById('m_estoqueLabel').textContent = isResina ? 'Estoque (ml)' : 'Estoque (g)';
+  }
+  document.getElementById('m_tipo').onchange = syncLabels;
+  syncLabels();
+
+  document.getElementById('matModalClose').onclick = closeModal;
+  document.getElementById('matModalCancel').onclick = closeModal;
+  document.getElementById('matModalOverlay').onclick = (e) => { if(e.target.id === 'matModalOverlay') closeModal(); };
+  document.getElementById('m_nome').focus();
+
+  document.getElementById('matModalForm').onsubmit = (e) => {
+    e.preventDefault();
+    const nome = document.getElementById('m_nome').value.trim();
+    if(!nome) return;
+    const payload = {
+      id: form.id,
+      tipo: document.getElementById('m_tipo').value,
+      nome,
+      cor: document.getElementById('m_cor').value,
+      preco: document.getElementById('m_preco').value,
+      estoque: document.getElementById('m_estoque').value,
+    };
+    if(mode === 'new'){ newMaterialItem(payload); } else { updateMaterialItem(payload); }
+    closeModal();
+  };
+}
+
+function openMaterialDeleteConfirm(item){
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+  <div class="overlay" id="matConfirmOverlay">
+    <div class="modal" style="max-width:380px;">
+      <p style="font-family:'Lora',serif;font-weight:600;margin:0 0 4px;">Excluir "${escapeHtml(item.nome)}"?</p>
+      <p style="font-size:14px;color:var(--gray);margin:0 0 20px;">Essa ação não pode ser desfeita.</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="matConfirmCancel">Cancelar</button>
+        <button class="btn btn-danger" id="matConfirmDelete">Excluir</button>
+      </div>
+    </div>
+  </div>`;
+  document.getElementById('matConfirmOverlay').onclick = (e) => { if(e.target.id==='matConfirmOverlay') closeModal(); };
+  document.getElementById('matConfirmCancel').onclick = closeModal;
+  document.getElementById('matConfirmDelete').onclick = () => { deleteMaterialItem(item.id); closeModal(); };
+}
+
+document.getElementById('btnNewMaterial').onclick = () => openMaterialModal('new', null);
+
+// ================= Aprovar precificação -> Orçamento =================
+document.getElementById('btnApprove').onclick = () => {
+  const snap = (window.Precifica3D && window.Precifica3D.getSnapshot()) || null;
+  openApproveModal(snap);
+};
+
+function openApproveModal(snap){
+  const root = document.getElementById('modalRoot');
+  const valorSugerido = snap && snap.precoSugerido != null ? snap.precoSugerido.toFixed(2) : '';
+  const custoSugerido = snap && snap.custoTotal != null ? snap.custoTotal.toFixed(2) : '';
+  const descSugerida = snap ? snap.descricaoSugerida : '';
+
+  root.innerHTML = `
+  <div class="overlay" id="approveOverlay">
+    <form class="modal" id="approveForm">
+      <div class="modal-head">
+        <h2>Enviar para Orçamento</h2>
+        <button type="button" id="approveClose">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="field">
+        <label>Cliente</label>
+        <input id="ap_cliente" required placeholder="Nome do cliente" />
+      </div>
+      <div class="field">
+        <label>Descrição do serviço</label>
+        <textarea id="ap_descricao" placeholder="O que será feito">${escapeHtml(descSugerida)}</textarea>
+      </div>
+      <div class="field-row" style="margin-bottom:16px;">
+        <div class="field" style="margin-bottom:0;">
+          <label>Valor orçado (R$)</label>
+          <input type="number" step="0.01" id="ap_valor" value="${valorSugerido}" placeholder="0,00" />
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label>Custo estimado (R$)</label>
+          <input type="number" step="0.01" id="ap_custo" value="${custoSugerido}" placeholder="0,00" />
+        </div>
+      </div>
+      ${snap && snap.materialNome ? `<p class="hint" style="margin:-6px 0 16px;">Ao salvar, ${snap.quantidade.toFixed(1)}${snap.unidade} de "${escapeHtml(snap.materialNome)}" serão descontados do estoque.</p>` : ''}
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="approveCancel">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Salvar em Orçamentos</button>
+      </div>
+    </form>
+  </div>`;
+
+  document.getElementById('approveClose').onclick = closeModal;
+  document.getElementById('approveCancel').onclick = closeModal;
+  document.getElementById('approveOverlay').onclick = (e) => { if(e.target.id === 'approveOverlay') closeModal(); };
+  document.getElementById('ap_cliente').focus();
+
+  document.getElementById('approveForm').onsubmit = (e) => {
+    e.preventDefault();
+    const cliente = document.getElementById('ap_cliente').value.trim();
+    if(!cliente) return;
+    const payload = {
+      cliente,
+      descricao: document.getElementById('ap_descricao').value,
+      status: 'orcamento',
+      valorOrcado: document.getElementById('ap_valor').value,
+      custoEstimado: document.getElementById('ap_custo').value,
+      valorRecebido: '',
+      custoReal: '',
+    };
+    newService(payload);
+    if(snap && snap.materialId){
+      window.Materiais.deduct(snap.materialId, snap.quantidade);
+    }
+    closeModal();
+    switchMainView('gestao');
+    tab = 'orcamento';
+    render();
+  };
+}
+
+// ================= Init =================
+(async function initExtras(){
+  await loadMateriais();
+  renderMateriaisView();
+  if(window.Precifica3D) window.Precifica3D.refreshSelects();
+})();
+
+</script>
+
+</body>
+</html>
